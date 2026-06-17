@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block title %}Employee Management - AutoAssemble Cloud Portal{% endblock %}
+
+{% block page_heading %}Employee Management{% endblock %}
+
+{% block content %}
+<div class="glass-card" id="employees-container">
+    <!-- Search and Actions Bar -->
+    <div class="table-controls">
+        <form action="{{ url_for('employees_list') }}" method="GET" class="search-box" id="search-form">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" name="search" id="search-input" placeholder="Search by name, department, or task..." value="{{ search_query }}">
+        </form>
+
+        {% if session.get('role_name') in ['Administrator', 'Production Manager'] %}
+        <button class="btn btn-primary" onclick="openModal('addEmployeeModal')" id="btn-add-employee">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>Register Employee</span>
+        </button>
+        {% endif %}
+    </div>
+
+    <!-- Data Table -->
+    <div class="table-wrapper">
+        <table class="custom-table" id="employees-table">
+            <thead>
+                <tr>
+                    <th>Employee ID</th>
+                    <th>Name</th>
+                    <th>Department</th>
+                    <th>Role</th>
+                    <th>Assigned Task</th>
+                    <th>Task Status</th>
+                    {% if session.get('role_name') in ['Administrator', 'Production Manager'] %}
+                    <th>Actions</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% if employees %}
+                    {% for emp in employees %}
+                    <tr>
+                        <td style="font-weight: 600; color: var(--accent);">EMP-{{ "%04d" | format(emp.id) }}</td>
+                        <td>{{ emp.name }}</td>
+                        <td>{{ emp.department }}</td>
+                        <td>{{ emp.role }}</td>
+                        <td>{{ emp.task_description or 'No active task assigned' }}</td>
+                        <td>
+                            {% if emp.task_status %}
+                            <span class="badge badge-{{ emp.task_status.lower().replace(' ', '') }}">
+                                {{ emp.task_status }}
+                            </span>
+                            {% else %}
+                            <span class="badge badge-planned">-</span>
+                            {% endif %}
+                        </td>
+                        {% if session.get('role_name') in ['Administrator', 'Production Manager'] %}
+                        <td class="actions-cell">
+                            <button class="btn btn-secondary btn-small" 
+                                    onclick="openEditModal('{{ emp.id }}', '{{ emp.name }}', '{{ emp.department }}', '{{ emp.role }}', '{{ emp.task_id or '' }}', '{{ emp.task_description or '' }}', '{{ emp.task_status or 'Pending' }}')"
+                                    title="Edit Employee">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            </button>
+                            <form action="{{ url_for('delete_employee', emp_id=emp.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this employee? Their active tasks will be unassigned.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-danger btn-small" title="Delete Employee">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                </button>
+                            </form>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="{% if session.get('role_name') in ['Administrator', 'Production Manager'] %}7{% else %}6{% endif %}" style="text-align: center; padding: 2rem;">
+                            No employees found. Try modifying your search.
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        <span class="pagination-info">
+            Showing Page <strong>{{ page }}</strong> of <strong>{{ total_pages }}</strong>
+        </span>
+        <div class="pagination-buttons">
+            <a href="{{ url_for('employees_list', page=page-1, search=search_query) }}" 
+               class="btn btn-secondary btn-small {% if page == 1 %}disabled{% endif %}" 
+               style="pointer-events: {% if page == 1 %}none{% else %}auto{% endif %}; opacity: {% if page == 1 %}0.5{% else %}1{% endif %};">
+                &laquo; Prev
+            </a>
+            <a href="{{ url_for('employees_list', page=page+1, search=search_query) }}" 
+               class="btn btn-secondary btn-small {% if page == total_pages %}disabled{% endif %}" 
+               style="pointer-events: {% if page == total_pages %}none{% else %}auto{% endif %}; opacity: {% if page == total_pages %}0.5{% else %}1{% endif %};">
+                Next &raquo;
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ================= MODALS ================= -->
+
+{% if session.get('role_name') in ['Administrator', 'Production Manager'] %}
+<!-- Register Employee Modal -->
+<div class="modal" id="addEmployeeModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Register Employee</h2>
+            <button class="close-btn" onclick="closeModal('addEmployeeModal')">&times;</button>
+        </div>
+        <form action="{{ url_for('add_employee') }}" method="POST" id="add-employee-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <div class="form-group">
+                <label for="add-name">Full Name</label>
+                <input type="text" id="add-name" name="name" class="form-control" placeholder="e.g. John Doe" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="add-dept">Department</label>
+                <select id="add-dept" name="department" class="form-control" required>
+                    <option value="Assembly">Assembly</option>
+                    <option value="Quality Assurance">Quality Assurance</option>
+                    <option value="Logistics">Logistics</option>
+                    <option value="Engineering">Engineering</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="add-role">Role</label>
+                <select id="add-role" name="role" class="form-control" required>
+                    <option value="Technician">Technician</option>
+                    <option value="QA Inspector">QA Inspector</option>
+                    <option value="Supervisor">Supervisor</option>
+                    <option value="Line Manager">Line Manager</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="add-task-desc">Assign Task Description (Optional)</label>
+                <textarea id="add-task-desc" name="task_description" class="form-control" placeholder="e.g. Inspect paint depth on Vehicle #5" rows="3"></textarea>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 2rem;">
+                <label for="add-task-status">Task Status</label>
+                <select id="add-task-status" name="task_status" class="form-control">
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                </select>
+            </div>
+            
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('addEmployeeModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Employee</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Employee Modal -->
+<div class="modal" id="editEmployeeModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Employee Details</h2>
+            <button class="close-btn" onclick="closeModal('editEmployeeModal')">&times;</button>
+        </div>
+        <form action="{{ url_for('edit_employee') }}" method="POST" id="edit-employee-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" id="edit-id" name="id">
+            <input type="hidden" id="edit-task-id" name="task_id">
+            
+            <div class="form-group">
+                <label for="edit-name">Full Name</label>
+                <input type="text" id="edit-name" name="name" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="edit-dept">Department</label>
+                <select id="edit-dept" name="department" class="form-control" required>
+                    <option value="Assembly">Assembly</option>
+                    <option value="Quality Assurance">Quality Assurance</option>
+                    <option value="Logistics">Logistics</option>
+                    <option value="Engineering">Engineering</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="edit-role">Role</label>
+                <select id="edit-role" name="role" class="form-control" required>
+                    <option value="Technician">Technician</option>
+                    <option value="QA Inspector">QA Inspector</option>
+                    <option value="Supervisor">Supervisor</option>
+                    <option value="Line Manager">Line Manager</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="edit-task-desc">Assigned Task Description</label>
+                <textarea id="edit-task-desc" name="task_description" class="form-control" placeholder="No active task assigned" rows="3"></textarea>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 2rem;">
+                <label for="edit-task-status">Task Status</label>
+                <select id="edit-task-status" name="task_status" class="form-control">
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                </select>
+            </div>
+            
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('editEmployeeModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Update Details</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function openEditModal(id, name, department, role, task_id, task_description, task_status) {
+        document.getElementById('edit-id').value = id;
+        document.getElementById('edit-name').value = name;
+        document.getElementById('edit-dept').value = department;
+        document.getElementById('edit-role').value = role;
+        document.getElementById('edit-task-id').value = task_id;
+        document.getElementById('edit-task-desc').value = task_description;
+        document.getElementById('edit-task-status').value = task_status;
+        
+        openModal('editEmployeeModal');
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,42 @@
+services:
+  db:
+    build:
+      context: .
+      dockerfile: db.Dockerfile
+    container_name: auto_assemble_db
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    environment:
+      MYSQL_DATABASE: auto_assemble_db
+      MYSQL_USER: auto_user
+      MYSQL_PASSWORD: auto_pass123
+      MYSQL_ROOT_PASSWORD: rootpassword123
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-popt", "--password=rootpassword123"]
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  web:
+    build: .
+    container_name: auto_assemble_web
+    restart: always
+    ports:
+      - "80:5000" # Maps standard HTTP port on Host/EC2 to port 5000 on Flask
+    environment:
+      - DB_HOST=db
+      - DB_USER=auto_user
+      - DB_PASSWORD=auto_pass123
+      - DB_NAME=auto_assemble_db
+      - DB_PORT=3306
+      - FLASK_SECRET_KEY=prod-session-secret-98234798127398127
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mysql_data:

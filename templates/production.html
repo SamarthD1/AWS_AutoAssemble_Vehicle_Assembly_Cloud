@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+
+{% block title %}Production Tracking - AutoAssemble Cloud Portal{% endblock %}
+
+{% block page_heading %}Production Tracking{% endblock %}
+
+{% block content %}
+<div class="glass-card" id="production-container">
+    <!-- Search and Actions Bar -->
+    <div class="table-controls">
+        <form action="{{ url_for('production_list') }}" method="GET" class="search-box" id="search-form">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" name="search" id="search-input" placeholder="Search by model or status..." value="{{ search_query }}">
+        </form>
+
+        {% if session.get('role_name') in ['Administrator', 'Production Manager'] %}
+        <button class="btn btn-primary" onclick="openModal('addOrderModal')" id="btn-add-order">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>Create Order</span>
+        </button>
+        {% endif %}
+    </div>
+
+    <!-- Data Table -->
+    <div class="table-wrapper">
+        <table class="custom-table" id="production-table">
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>Vehicle Model</th>
+                    <th>Progress</th>
+                    <th>Start Date</th>
+                    <th>Est. Completion</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if orders %}
+                    {% for order in orders %}
+                    <tr>
+                        <td style="font-weight: 600; color: var(--accent);">ORD-{{ "%04d" | format(order.id) }}</td>
+                        <td>{{ order.vehicle_model }} <span style="font-size: 0.8rem; color: var(--text-secondary);">(VEH-{{ "%04d" | format(order.vehicle_id) }})</span></td>
+                        <td style="width: 25%;">
+                            <div class="progress-container">
+                                <div class="progress-fill" style="width: {{ order.progress_percentage }}%;"></div>
+                            </div>
+                            <span class="progress-text">{{ order.progress_percentage }}% Complete</span>
+                        </td>
+                        <td>{{ order.start_date or '-' }}</td>
+                        <td>{{ order.estimated_completion_date or '-' }}</td>
+                        <td>
+                            <span class="badge badge-{{ order.status.lower().replace(' ', '') }}">
+                                {{ order.status }}
+                            </span>
+                        </td>
+                        <td class="actions-cell">
+                            {% if session.get('role_name') in ['Administrator', 'Production Manager'] %}
+                            <!-- Managers and Admins get Full Edit -->
+                            <button class="btn btn-secondary btn-small" 
+                                    onclick="openEditModal('{{ order.id }}', '{{ order.vehicle_id }}', '{{ order.progress_percentage }}', '{{ order.start_date or '' }}', '{{ order.estimated_completion_date or '' }}', '{{ order.status }}')"
+                                    title="Edit Order">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            </button>
+                            <form action="{{ url_for('delete_production', order_id=order.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this production order?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-danger btn-small" title="Delete Order">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                </button>
+                            </form>
+                            {% else %}
+                            <!-- Staff can only update status/progress -->
+                            <button class="btn btn-primary btn-small" 
+                                    onclick="openStaffUpdateModal('{{ order.id }}', '{{ order.progress_percentage }}', '{{ order.status }}')"
+                                    title="Update Status">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                                <span>Update</span>
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 2rem;">
+                            No production orders found. Try modifying your search query.
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        <span class="pagination-info">
+            Showing Page <strong>{{ page }}</strong> of <strong>{{ total_pages }}</strong>
+        </span>
+        <div class="pagination-buttons">
+            <a href="{{ url_for('production_list', page=page-1, search=search_query) }}" 
+               class="btn btn-secondary btn-small {% if page == 1 %}disabled{% endif %}" 
+               style="pointer-events: {% if page == 1 %}none{% else %}auto{% endif %}; opacity: {% if page == 1 %}0.5{% else %}1{% endif %};">
+                &laquo; Prev
+            </a>
+            <a href="{{ url_for('production_list', page=page+1, search=search_query) }}" 
+               class="btn btn-secondary btn-small {% if page == total_pages %}disabled{% endif %}" 
+               style="pointer-events: {% if page == total_pages %}none{% else %}auto{% endif %}; opacity: {% if page == total_pages %}0.5{% else %}1{% endif %};">
+                Next &raquo;
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ================= MODALS ================= -->
+
+{% if session.get('role_name') in ['Administrator', 'Production Manager'] %}
+<!-- Add Production Order Modal -->
+<div class="modal" id="addOrderModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Create Production Order</h2>
+            <button class="close-btn" onclick="closeModal('addOrderModal')">&times;</button>
+        </div>
+        <form action="{{ url_for('add_production') }}" method="POST" id="add-order-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <div class="form-group">
+                <label for="add-vehicle">Assign Vehicle</label>
+                <select id="add-vehicle" name="vehicle_id" class="form-control" required>
+                    {% for vehicle in available_vehicles %}
+                    <option value="{{ vehicle.id }}">{{ vehicle.model }} (ID: {{ vehicle.id }}) - {{ vehicle.status }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="add-progress">Progress (0 - 100%)</label>
+                <div style="display:flex; align-items:center; gap: 1rem;">
+                    <input type="range" id="add-progress" name="progress_percentage" min="0" max="100" value="0" class="form-control" style="flex-grow:1;" oninput="this.nextElementSibling.value = this.value + '%'">
+                    <output style="font-weight:600; width: 40px; text-align:right;">0%</output>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="add-start">Start Date</label>
+                <input type="date" id="add-start" name="start_date" class="form-control">
+            </div>
+            
+            <div class="form-group">
+                <label for="add-est-completion">Est. Completion Date</label>
+                <input type="date" id="add-est-completion" name="estimated_completion_date" class="form-control">
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 2rem;">
+                <label for="add-status">Production Status</label>
+                <select id="add-status" name="status" class="form-control" required>
+                    <option value="Planned">Planned</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Quality Check">Quality Check</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Delayed">Delayed</option>
+                </select>
+            </div>
+            
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('addOrderModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Order</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Production Order Modal (Full CRUD) -->
+<div class="modal" id="editOrderModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Production Order</h2>
+            <button class="close-btn" onclick="closeModal('editOrderModal')">&times;</button>
+        </div>
+        <form action="{{ url_for('edit_production') }}" method="POST" id="edit-order-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" id="edit-id" name="id">
+            
+            <div class="form-group">
+                <label for="edit-vehicle">Assign Vehicle</label>
+                <select id="edit-vehicle" name="vehicle_id" class="form-control" required>
+                    {% for vehicle in all_vehicles_list %}
+                    <option value="{{ vehicle.id }}">{{ vehicle.model }} (ID: {{ vehicle.id }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="edit-progress">Progress (0 - 100%)</label>
+                <div style="display:flex; align-items:center; gap: 1rem;">
+                    <input type="range" id="edit-progress" name="progress_percentage" min="0" max="100" class="form-control" style="flex-grow:1;" oninput="this.nextElementSibling.value = this.value + '%'">
+                    <output id="edit-progress-output" style="font-weight:600; width: 40px; text-align:right;">0%</output>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="edit-start">Start Date</label>
+                <input type="date" id="edit-start" name="start_date" class="form-control">
+            </div>
+            
+            <div class="form-group">
+                <label for="edit-est-completion">Est. Completion Date</label>
+                <input type="date" id="edit-est-completion" name="estimated_completion_date" class="form-control">
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 2rem;">
+                <label for="edit-status">Production Status</label>
+                <select id="edit-status" name="status" class="form-control" required>
+                    <option value="Planned">Planned</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Quality Check">Quality Check</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Delayed">Delayed</option>
+                </select>
+            </div>
+            
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('editOrderModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Update Order</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% else %}
+<!-- Staff Update Modal (Restricted fields) -->
+<div class="modal" id="staffUpdateModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Update Production Progress</h2>
+            <button class="close-btn" onclick="closeModal('staffUpdateModal')">&times;</button>
+        </div>
+        <form action="{{ url_for('staff_update_production') }}" method="POST" id="staff-update-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" id="staff-id" name="id">
+            
+            <div class="form-group">
+                <label for="staff-progress">Progress (0 - 100%)</label>
+                <div style="display:flex; align-items:center; gap: 1rem;">
+                    <input type="range" id="staff-progress" name="progress_percentage" min="0" max="100" class="form-control" style="flex-grow:1;" oninput="this.nextElementSibling.value = this.value + '%'">
+                    <output id="staff-progress-output" style="font-weight:600; width: 40px; text-align:right;">0%</output>
+                </div>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 2rem;">
+                <label for="staff-status">Production Status</label>
+                <select id="staff-status" name="status" class="form-control" required>
+                    <option value="Planned">Planned</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Quality Check">Quality Check</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Delayed">Delayed</option>
+                </select>
+            </div>
+            
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('staffUpdateModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Submit Progress</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function openEditModal(id, vehicle_id, progress, start, est_completion, status) {
+        document.getElementById('edit-id').value = id;
+        document.getElementById('edit-vehicle').value = vehicle_id;
+        document.getElementById('edit-progress').value = progress;
+        document.getElementById('edit-progress-output').value = progress + '%';
+        document.getElementById('edit-start').value = start;
+        document.getElementById('edit-est-completion').value = est_completion;
+        document.getElementById('edit-status').value = status;
+        
+        openModal('editOrderModal');
+    }
+
+    function openStaffUpdateModal(id, progress, status) {
+        document.getElementById('staff-id').value = id;
+        document.getElementById('staff-progress').value = progress;
+        document.getElementById('staff-progress-output').value = progress + '%';
+        document.getElementById('staff-status').value = status;
+        
+        openModal('staffUpdateModal');
+    }
+</script>
+{% endblock %}

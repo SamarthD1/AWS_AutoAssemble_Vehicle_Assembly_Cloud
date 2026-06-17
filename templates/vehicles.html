@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+
+{% block title %}Vehicle Management - AutoAssemble Cloud Portal{% endblock %}
+
+{% block page_heading %}Vehicle Management{% endblock %}
+
+{% block content %}
+<div class="glass-card" id="vehicles-container">
+    <!-- Search and Actions Bar -->
+    <div class="table-controls">
+        <form action="{{ url_for('vehicles_list') }}" method="GET" class="search-box" id="search-form">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" name="search" id="search-input" placeholder="Search by model, type, or line..." value="{{ search_query }}">
+        </form>
+
+        {% if session.get('role_name') in ['Administrator', 'Production Manager'] %}
+        <button class="btn btn-primary" onclick="openModal('addVehicleModal')" id="btn-add-vehicle">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>Add Vehicle</span>
+        </button>
+        {% endif %}
+    </div>
+
+    <!-- Data Table -->
+    <div class="table-wrapper">
+        <table class="custom-table" id="vehicles-table">
+            <thead>
+                <tr>
+                    <th>Vehicle ID</th>
+                    <th>Vehicle Model</th>
+                    <th>Type</th>
+                    <th>Assembly Line</th>
+                    <th>Status</th>
+                    <th>Start Date</th>
+                    <th>Completion Date</th>
+                    {% if session.get('role_name') in ['Administrator', 'Production Manager'] %}
+                    <th>Actions</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% if vehicles %}
+                    {% for vehicle in vehicles %}
+                    <tr>
+                        <td style="font-weight: 600; color: var(--accent);">VEH-{{ "%04d" | format(vehicle.id) }}</td>
+                        <td>{{ vehicle.model }}</td>
+                        <td>{{ vehicle.type }}</td>
+                        <td>{{ vehicle.assembly_line }}</td>
+                        <td>
+                            <span class="badge badge-{{ vehicle.status.lower().replace(' ', '') }}">
+                                {{ vehicle.status }}
+                            </span>
+                        </td>
+                        <td>{{ vehicle.start_date or '-' }}</td>
+                        <td>{{ vehicle.completion_date or '-' }}</td>
+                        {% if session.get('role_name') in ['Administrator', 'Production Manager'] %}
+                        <td class="actions-cell">
+                            <button class="btn btn-secondary btn-small" 
+                                    onclick="openEditModal('{{ vehicle.id }}', '{{ vehicle.model }}', '{{ vehicle.type }}', '{{ vehicle.assembly_line }}', '{{ vehicle.status }}', '{{ vehicle.start_date or '' }}', '{{ vehicle.completion_date or '' }}')"
+                                    title="Edit Vehicle">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                            </button>
+                            <form action="{{ url_for('delete_vehicle', vehicle_id=vehicle.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this vehicle and all associated production tracking?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-danger btn-small" title="Delete Vehicle">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                </button>
+                            </form>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="{% if session.get('role_name') in ['Administrator', 'Production Manager'] %}8{% else %}7{% endif %}" style="text-align: center; padding: 2rem;">
+                            No vehicles found. Try modifying your search.
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        <span class="pagination-info">
+            Showing Page <strong>{{ page }}</strong> of <strong>{{ total_pages }}</strong>
+        </span>
+        <div class="pagination-buttons">
+            <a href="{{ url_for('vehicles_list', page=page-1, search=search_query) }}" 
+               class="btn btn-secondary btn-small {% if page == 1 %}disabled{% endif %}" 
+               style="pointer-events: {% if page == 1 %}none{% else %}auto{% endif %}; opacity: {% if page == 1 %}0.5{% else %}1{% endif %};">
+                &laquo; Prev
+            </a>
+            <a href="{{ url_for('vehicles_list', page=page+1, search=search_query) }}" 
+               class="btn btn-secondary btn-small {% if page == total_pages %}disabled{% endif %}" 
+               style="pointer-events: {% if page == total_pages %}none{% else %}auto{% endif %}; opacity: {% if page == total_pages %}0.5{% else %}1{% endif %};">
+                Next &raquo;
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ================= MODALS ================= -->
+
+{% if session.get('role_name') in ['Administrator', 'Production Manager'] %}
+<!-- Add Vehicle Modal -->
+<div class="modal" id="addVehicleModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Register New Vehicle</h2>
+            <button class="close-btn" onclick="closeModal('addVehicleModal')">&times;</button>
+        </div>
+        <form action="{{ url_for('add_vehicle') }}" method="POST" id="add-vehicle-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <div class="form-group">
+                <label for="add-model">Vehicle Model</label>
+                <input type="text" id="add-model" name="model" class="form-control" placeholder="e.g. Triton PickUp" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="add-type">Vehicle Type</label>
+                <select id="add-type" name="type" class="form-control" required>
+                    <option value="Electric">Electric</option>
+                    <option value="Sedan">Sedan</option>
+                    <option value="SUV">SUV</option>
+                    <option value="Truck">Truck</option>
+                    <option value="Hybrid">Hybrid</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="add-line">Assembly Line</label>
+                <select id="add-line" name="assembly_line" class="form-control" required>
+                    <option value="Line Alpha (EV)">Line Alpha (EV)</option>
+                    <option value="Line Beta (Sedan)">Line Beta (Sedan)</option>
+                    <option value="Line Gamma (HD)">Line Gamma (HD)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="add-status">Production Status</label>
+                <select id="add-status" name="status" class="form-control" required>
+                    <option value="Planned">Planned</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Quality Check">Quality Check</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Delayed">Delayed</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="add-start">Start Date (Optional)</label>
+                <input type="date" id="add-start" name="start_date" class="form-control">
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 2rem;">
+                <label for="add-completion">Completion Date (Optional)</label>
+                <input type="date" id="add-completion" name="completion_date" class="form-control">
+            </div>
+            
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('addVehicleModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Vehicle</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Vehicle Modal -->
+<div class="modal" id="editVehicleModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Vehicle Details</h2>
+            <button class="close-btn" onclick="closeModal('editVehicleModal')">&times;</button>
+        </div>
+        <form action="{{ url_for('edit_vehicle') }}" method="POST" id="edit-vehicle-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" id="edit-id" name="id">
+            
+            <div class="form-group">
+                <label for="edit-model">Vehicle Model</label>
+                <input type="text" id="edit-model" name="model" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="edit-type">Vehicle Type</label>
+                <select id="edit-type" name="type" class="form-control" required>
+                    <option value="Electric">Electric</option>
+                    <option value="Sedan">Sedan</option>
+                    <option value="SUV">SUV</option>
+                    <option value="Truck">Truck</option>
+                    <option value="Hybrid">Hybrid</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="edit-line">Assembly Line</label>
+                <select id="edit-line" name="assembly_line" class="form-control" required>
+                    <option value="Line Alpha (EV)">Line Alpha (EV)</option>
+                    <option value="Line Beta (Sedan)">Line Beta (Sedan)</option>
+                    <option value="Line Gamma (HD)">Line Gamma (HD)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="edit-status">Production Status</label>
+                <select id="edit-status" name="status" class="form-control" required>
+                    <option value="Planned">Planned</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Quality Check">Quality Check</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Delayed">Delayed</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="edit-start">Start Date</label>
+                <input type="date" id="edit-start" name="start_date" class="form-control">
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 2rem;">
+                <label for="edit-completion">Completion Date</label>
+                <input type="date" id="edit-completion" name="completion_date" class="form-control">
+            </div>
+            
+            <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('editVehicleModal')">Cancel</button>
+                <button type="submit" class="btn btn-primary">Update Vehicle</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function openEditModal(id, model, type, line, status, start, completion) {
+        document.getElementById('edit-id').value = id;
+        document.getElementById('edit-model').value = model;
+        document.getElementById('edit-type').value = type;
+        document.getElementById('edit-line').value = line;
+        document.getElementById('edit-status').value = status;
+        document.getElementById('edit-start').value = start;
+        document.getElementById('edit-completion').value = completion;
+        
+        openModal('editVehicleModal');
+    }
+</script>
+{% endblock %}

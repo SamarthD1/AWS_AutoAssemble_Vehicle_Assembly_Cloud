@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - AutoAssemble Cloud Portal{% endblock %}
+
+{% block page_heading %}Management Reports{% endblock %}
+
+{% block content %}
+<div class="reports-grid">
+    <!-- Vehicle Production Report -->
+    <div class="glass-card" id="report-vehicle-card">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.5rem;">
+            <div>
+                <h2 style="font-size:1.25rem; font-weight:700; margin-bottom:0.25rem;">Vehicle Production Report</h2>
+                <p style="font-size:0.85rem; color:var(--text-secondary);">Summary of vehicles completed and currently in progress by type</p>
+            </div>
+            <a href="{{ url_for('export_report', report_type='vehicles') }}" class="btn btn-primary btn-small" id="export-vehicle-csv">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <span>Export CSV</span>
+            </a>
+        </div>
+        
+        <div class="table-wrapper">
+            <table class="custom-table" style="font-size:0.85rem;">
+                <thead>
+                    <tr>
+                        <th>Vehicle Type</th>
+                        <th>Planned</th>
+                        <th>In Progress</th>
+                        <th>Completed</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in vehicle_summary %}
+                    <tr>
+                        <td style="font-weight:600;">{{ row.type }}</td>
+                        <td>{{ row.planned }}</td>
+                        <td>{{ row.inprogress }}</td>
+                        <td>{{ row.completed }}</td>
+                        <td style="font-weight:600; color:var(--accent);">{{ row.total }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Employee Performance Report -->
+    <div class="glass-card" id="report-employee-card">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.5rem;">
+            <div>
+                <h2 style="font-size:1.25rem; font-weight:700; margin-bottom:0.25rem;">Employee Performance Report</h2>
+                <p style="font-size:0.85rem; color:var(--text-secondary);">Summarizes employee task loads and progress by status</p>
+            </div>
+            <a href="{{ url_for('export_report', report_type='employees') }}" class="btn btn-primary btn-small" id="export-employee-csv">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <span>Export CSV</span>
+            </a>
+        </div>
+        
+        <div class="table-wrapper">
+            <table class="custom-table" style="font-size:0.85rem;">
+                <thead>
+                    <tr>
+                        <th>Employee Name</th>
+                        <th>Department</th>
+                        <th>Task Status</th>
+                        <th>Task Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in employee_summary %}
+                    <tr>
+                        <td style="font-weight:600;">{{ row.name }}</td>
+                        <td>{{ row.department }}</td>
+                        <td>
+                            {% if row.task_status %}
+                            <span class="badge badge-{{ row.task_status.lower().replace(' ', '') }}" style="font-size:0.7rem;">
+                                {{ row.task_status }}
+                            </span>
+                            {% else %}
+                            <span style="color:var(--text-secondary);">None</span>
+                            {% endif %}
+                        </td>
+                        <td style="white-space:normal; max-width:180px;">{{ row.task_description or 'No task assigned' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Production Efficiency Report -->
+    <div class="glass-card" id="report-efficiency-card" style="grid-column: span 1;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.5rem;">
+            <div>
+                <h2 style="font-size:1.25rem; font-weight:700; margin-bottom:0.25rem;">Production Efficiency Report</h2>
+                <p style="font-size:0.85rem; color:var(--text-secondary);">Details average cycle times and status count breakdown</p>
+            </div>
+            <a href="{{ url_for('export_report', report_type='efficiency') }}" class="btn btn-primary btn-small" id="export-efficiency-csv">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <span>Export CSV</span>
+            </a>
+        </div>
+        
+        <div class="table-wrapper" style="margin-bottom:1rem;">
+            <table class="custom-table" style="font-size:0.85rem;">
+                <thead>
+                    <tr>
+                        <th>Assembly Line</th>
+                        <th>Active Count</th>
+                        <th>Avg. Progress</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in efficiency_summary %}
+                    <tr>
+                        <td style="font-weight:600;">{{ row.assembly_line }}</td>
+                        <td>{{ row.active_count }}</td>
+                        <td>
+                            <div class="progress-container" style="height:6px; margin-bottom:0.2rem;">
+                                <div class="progress-fill" style="width: {{ row.avg_progress }}%;"></div>
+                            </div>
+                            <span style="font-size:0.8rem; font-weight:500;">{{ "%.1f" | format(row.avg_progress) }}% Avg.</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

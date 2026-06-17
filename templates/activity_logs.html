@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Activity Logs - AutoAssemble Cloud Portal{% endblock %}
+
+{% block page_heading %}System Activity Logs{% endblock %}
+
+{% block content %}
+<div class="glass-card" id="logs-container">
+    <div style="margin-bottom: 1.5rem;">
+        <p style="font-size:0.95rem; color:var(--text-secondary);">
+            Showing security operations, login histories, and data update audits. This view is restricted to System Administrators.
+        </p>
+    </div>
+
+    <!-- Data Table -->
+    <div class="table-wrapper">
+        <table class="custom-table" id="logs-table">
+            <thead>
+                <tr>
+                    <th>Log ID</th>
+                    <th>Timestamp</th>
+                    <th>User</th>
+                    <th>Action</th>
+                    <th>Event Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if logs %}
+                    {% for log in logs %}
+                    <tr>
+                        <td style="font-weight: 600; color: var(--accent);">LOG-{{ "%05d" | format(log.id) }}</td>
+                        <td>{{ log.timestamp }}</td>
+                        <td>
+                            <strong style="color: var(--text-primary);">{{ log.username or 'System' }}</strong>
+                        </td>
+                        <td>
+                            <span class="badge {% if log.action in ['User Login', 'User Logout'] %}badge-completed{% elif 'Creation' in log.action or 'Add' in log.action %}badge-inprogress{% elif 'Denied' in log.action %}badge-delayed{% else %}badge-planned{% endif %}">
+                                {{ log.action }}
+                            </span>
+                        </td>
+                        <td style="white-space: normal; max-width: 400px; word-break: break-all;">
+                            {{ log.details or '-' }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 2rem;">
+                            No activity logs found.
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        <span class="pagination-info">
+            Showing Page <strong>{{ page }}</strong> of <strong>{{ total_pages }}</strong>
+        </span>
+        <div class="pagination-buttons">
+            <a href="{{ url_for('activity_logs_view', page=page-1) }}" 
+               class="btn btn-secondary btn-small {% if page == 1 %}disabled{% endif %}" 
+               style="pointer-events: {% if page == 1 %}none{% else %}auto{% endif %}; opacity: {% if page == 1 %}0.5{% else %}1{% endif %};">
+                &laquo; Prev
+            </a>
+            <a href="{{ url_for('activity_logs_view', page=page+1) }}" 
+               class="btn btn-secondary btn-small {% if page == total_pages %}disabled{% endif %}" 
+               style="pointer-events: {% if page == total_pages %}none{% else %}auto{% endif %}; opacity: {% if page == total_pages %}0.5{% else %}1{% endif %};">
+                Next &raquo;
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
