@@ -632,7 +632,7 @@ def reports_view():
             """
             SELECT type, 
                    SUM(CASE WHEN status = 'Planned' THEN 1 ELSE 0 END) as planned,
-                   SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) as inprogress,
+                   SUM(CASE WHEN status IN ('In Progress', 'Quality Check', 'Delayed') THEN 1 ELSE 0 END) as inprogress,
                    SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) as completed,
                    COUNT(*) as total
             FROM vehicles 
