@@ -514,7 +514,7 @@ def add_employee():
     department = request.form.get('department', '').strip()
     role = request.form.get('role', '').strip()
     task_description = request.form.get('task_description', '').strip()
-    task_status = request.form.get('task_status', 'Pending')
+    task_status = request.form.get('task_status', '').strip()
 
     if not name or not department or not role:
         flash("Name, Department, and Role are mandatory.", "danger")
@@ -529,7 +529,9 @@ def add_employee():
         )
 
         # Insert assigned task if specified
-        if task_description:
+        if task_status:
+            if not task_description:
+                task_description = "General operational duties"
             db.execute_update(
                 "INSERT INTO tasks (employee_id, description, status) VALUES (%s, %s, %s)", 
                 (emp_id, task_description, task_status)
@@ -556,7 +558,7 @@ def edit_employee():
     except ValueError:
         task_id = None
     task_description = request.form.get('task_description', '').strip()
-    task_status = request.form.get('task_status', 'Pending')
+    task_status = request.form.get('task_status', '').strip()
 
     if not emp_id or not name or not department or not role:
         flash("Name, Department, and Role are mandatory.", "danger")
@@ -576,22 +578,27 @@ def edit_employee():
             if existing_task:
                 task_id = existing_task[0]['id']
 
-        if task_id:
-            if task_description:
+        if task_status in ('Pending', 'In Progress', 'Completed'):
+            if not task_description:
+                task_description = "General operational duties"
+
+            if task_id:
                 # Update existing task
                 db.execute_update(
                     "UPDATE tasks SET description = %s, status = %s WHERE id = %s", 
                     (task_description, task_status, task_id)
                 )
             else:
+                # Create new task
+                db.execute_update(
+                    "INSERT INTO tasks (employee_id, description, status) VALUES (%s, %s, %s)", 
+                    (emp_id, task_description, task_status)
+                )
+        else:
+            # No task selected or task cleared
+            if task_id:
                 # Task cleared, delete task
                 db.execute_update("DELETE FROM tasks WHERE id = %s", (task_id,))
-        elif task_description:
-            # Create new task
-            db.execute_update(
-                "INSERT INTO tasks (employee_id, description, status) VALUES (%s, %s, %s)", 
-                (emp_id, task_description, task_status)
-            )
 
         db.log_activity(session['user_id'], 'Employee Updates', f"Updated employee: {name} (ID: {emp_id})")
         flash(f"Employee EMP-{int(emp_id):04d} updated successfully.", "success")

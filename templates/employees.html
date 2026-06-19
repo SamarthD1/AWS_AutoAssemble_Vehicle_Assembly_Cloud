@@ -157,7 +157,8 @@
             
             <div class="form-group" style="margin-bottom: 2rem;">
                 <label for="add-task-status">Task Status</label>
-                <select id="add-task-status" name="task_status" class="form-control">
+                <select id="add-task-status" name="task_status" class="form-control" onchange="toggleTaskDescriptionRequired(this, 'add-task-desc')">
+                    <option value="">No task assigned</option>
                     <option value="Pending">Pending</option>
                     <option value="In Progress">In Progress</option>
                     <option value="Completed">Completed</option>
@@ -216,7 +217,8 @@
             
             <div class="form-group" style="margin-bottom: 2rem;">
                 <label for="edit-task-status">Task Status</label>
-                <select id="edit-task-status" name="task_status" class="form-control">
+                <select id="edit-task-status" name="task_status" class="form-control" onchange="toggleTaskDescriptionRequired(this, 'edit-task-desc')">
+                    <option value="">No task assigned</option>
                     <option value="Pending">Pending</option>
                     <option value="In Progress">In Progress</option>
                     <option value="Completed">Completed</option>
@@ -236,6 +238,17 @@
 
 {% block extra_scripts %}
 <script>
+    function toggleTaskDescriptionRequired(statusSelect, descId) {
+        const descField = document.getElementById(descId);
+        if (statusSelect.value !== "") {
+            descField.setAttribute("required", "required");
+            descField.placeholder = "e.g. Inspect paint depth (Required when a status is selected)";
+        } else {
+            descField.removeAttribute("required");
+            descField.placeholder = "No active task assigned";
+        }
+    }
+
     function openEditModalFromButton(button) {
         const id = button.getAttribute('data-id');
         const name = button.getAttribute('data-name');
@@ -252,6 +265,9 @@
         document.getElementById('edit-task-id').value = taskId;
         document.getElementById('edit-task-desc').value = taskDescription;
         document.getElementById('edit-task-status').value = taskStatus;
+        
+        // Synchronize required field logic for textarea
+        toggleTaskDescriptionRequired(document.getElementById('edit-task-status'), 'edit-task-desc');
         
         openModal('editEmployeeModal');
     }
