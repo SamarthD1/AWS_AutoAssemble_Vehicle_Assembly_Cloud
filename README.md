@@ -2,6 +2,10 @@
 
 AutoAssemble is an enterprise-grade automotive manufacturing portal designed for managing vehicle assembly operations, tracking production orders in real time, managing personnel task assignments, generating management reports, and viewing audit trails.
 
+## 📄 Project Documentation
+
+For detailed project requirements, architectural diagrams, system designs, and notes, please refer to the official [Google Document](https://docs.google.com/document/d/1eVY2Fit-_wNz6y82lluuRC_P6mPuux-T7gI_cD32Vfg/edit?usp=sharing).
+
 ## 🚀 Features
 
 - **Glassmorphic Design System**: Modern visual interface using CSS variables, micro-animations, custom scrollbars, and standard font styling.
