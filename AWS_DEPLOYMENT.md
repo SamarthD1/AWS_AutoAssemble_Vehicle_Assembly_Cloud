@@ -1,226 +1,157 @@
-# AWS EC2 Deployment Guide - AutoAssemble Cloud Portal
+# AWS EC2 & RDS Deployment Guide - AutoAssemble Cloud Portal
 
-This guide provides step-by-step instructions for deploying the AutoAssemble Vehicle Assembly Cloud Portal onto a single AWS EC2 instance running either **Ubuntu Server** or **Amazon Linux 2023**.
-
----
-
-## 🏗️ Step 1: Provision an AWS EC2 Instance
-
-1. Log in to the [AWS Management Console](https://aws.amazon.com/console/).
-2. Navigate to **EC2 Dashboard** and click **Launch Instance**.
-3. **Application and OS Images (AMI)**:
-   - **Option A (Ubuntu)**: Choose **Ubuntu Server 22.04 LTS** (or 24.04 LTS).
-   - **Option B (Amazon Linux)**: Choose **Amazon Linux 2023 (AL2023)**.
-4. **Instance Type**: Select **t2.micro** or **t3.micro** (Free Tier eligible).
-5. **Key Pair**: Select an existing key pair or create a new one (e.g., `autoassemble-key.pem`).
-6. **Network Settings (Security Group)**:
-   - Create a security group.
-   - Add the following inbound security group rules:
-     - **SSH**: Port `22` (Source: `My IP` or `0.0.0.0/0` if necessary).
-     - **HTTP**: Port `80` (Source: `0.0.0.0/0`) for web access.
-     - **HTTPS** (Optional): Port `443` (Source: `0.0.0.0/0`) for SSL.
-7. Launch the instance and note the **Public IPv4 Address**.
+This guide provides step-by-step instructions for deploying the AutoAssemble Vehicle Assembly Cloud Portal onto a single AWS EC2 instance running **Amazon Linux 2023** and connecting it to a managed **Amazon RDS MySQL 8.4** instance.
 
 ---
 
-## 🔑 Step 2: Connect via SSH
+## 🏗️ Step 1: Provision your AWS VPC Infrastructure
 
-Open a terminal on your host machine, navigate to your `.pem` key pair location, and run the SSH command matching your chosen OS:
-
-### Option A: For Ubuntu LTS
-```bash
-chmod 400 autoassemble-key.pem
-ssh -i autoassemble-key.pem ubuntu@<EC2-PUBLIC-IP>
-```
-
-### Option B: For Amazon Linux 2023
-```bash
-chmod 400 autoassemble-key.pem
-ssh -i autoassemble-key.pem ec2-user@<EC2-PUBLIC-IP>
-```
+1. **VPC Configuration**:
+   - Create a Custom VPC named `AutoAssemble-VPC` with CIDR block `10.0.0.0/16`.
+2. **Subnets Configuration**:
+   - **Public Subnet 1**: Name `Public-Subnet` (CIDR: `10.0.1.0/24`) in Availability Zone A (used for EC2 deployment).
+   - **Public Subnet 2**: Name `Public-Subnet-2` (CIDR: `10.0.2.0/24`) in Availability Zone B (needed for RDS Subnet Group Multi-AZ configuration).
+3. **Internet Gateway**:
+   - Create `AutoAssemble-IGW` and attach it to your VPC.
+4. **Route Table**:
+   - Create `AutoAssemble-RT`.
+   - Add a route: Destination `0.0.0.0/0` ──► Target `AutoAssemble-IGW`.
+   - Associate this route table with both subnets.
 
 ---
 
-## 🐳 Step 3: Install Docker and Docker Compose on EC2
+## 🔒 Step 2: Configure Security Groups
 
-Choose the installation script corresponding to your operating system:
+1. **EC2 Security Group (`AutoAssemble-SG`)**:
+   - Allow **SSH** (Port 22) from your IP or anywhere.
+   - Allow **HTTP** (Port 80) from anywhere (`0.0.0.0/0`).
+   - Allow **Flask** (Port 5000) from anywhere.
+2. **RDS Security Group (`autoassemble-rds-sg`)**:
+   - Allow **MYSQL/Aurora** (Port 3306) from the source VPC CIDR **`10.0.0.0/16`** (restricts database access only to instances inside the VPC).
 
-### Option A: For Ubuntu LTS (Debian-based)
+---
+
+## 🐧 Step 3: EC2 and Linux Administration Setup
+
+Launch a `t2.micro` EC2 instance using **Amazon Linux 2023** and your key pair (`AutoAssemble-Key.pem`).
+
+### 1. Connect via SSH
 ```bash
-# Update system packages
-sudo apt-get update -y && sudo apt-get upgrade -y
-sudo apt-get install -y ca-certificates curl gnupg lsb-release
-
-# Add Docker GPG Key
-sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
-# Register Docker Apt repository
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Install Docker Engine and Compose plugin
-sudo apt-get update -y
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-# Start and enable service
-sudo systemctl start docker
-sudo systemctl enable docker
-
-# Add user to docker group (bypasses sudo)
-sudo usermod -aG docker ubuntu
-
-# Log out and reconnect to apply group permissions
-exit
+chmod 400 AutoAssemble-Key.pem
+ssh -i AutoAssemble-Key.pem ec2-user@<EC2-PUBLIC-IP>
 ```
 
-### Option B: For Amazon Linux 2023 (RHEL-based)
+### 2. Configure Users and Permissions
+Create the operations team accounts and group on your EC2 instance:
 ```bash
-# Update packages
+# Create users
+sudo useradd admin
+sudo useradd manager
+sudo useradd operator
+
+# Set passwords
+sudo passwd admin
+sudo passwd manager
+sudo passwd operator
+
+# Create the production group and add the users
+sudo groupadd production
+sudo usermod -aG production admin
+sudo usermod -aG production manager
+sudo usermod -aG production operator
+```
+
+### 3. Install and Configure Docker
+```bash
+# Update repositories
 sudo dnf update -y
 
-# Install Docker and Docker Compose CLI plugin
-sudo dnf install -y docker docker-compose-plugin
+# Install Docker
+sudo dnf install docker -y
 
-# Start and enable service
+# Start and enable Docker
 sudo systemctl start docker
 sudo systemctl enable docker
 
-# Add ec2-user to docker group
+# Allow ec2-user to run docker commands without sudo
 sudo usermod -aG docker ec2-user
 
-# Log out and reconnect to apply group permissions
+# Log out and reconnect to refresh group permissions
 exit
 ```
 
----
-
-## 📂 Step 4: Deploy application codebase to EC2
-
-SSH back into your instance. Clone or copy your code to the instance root:
-
+Log back in:
 ```bash
-# Reconnect to instance:
-# ssh -i autoassemble-key.pem ubuntu@<EC2-PUBLIC-IP>    (for Ubuntu)
-# ssh -i autoassemble-key.pem ec2-user@<EC2-PUBLIC-IP>  (for Amazon Linux)
-
-git clone <YOUR_GIT_REPOSITORY_URL> autoassemble
-cd autoassemble
+ssh -i AutoAssemble-Key.pem ec2-user@<EC2-PUBLIC-IP>
 ```
 
 ---
 
-## ⚡ Step 5: Start the Application
+## 🗄️ Step 4: Import Database Schema to Amazon RDS
 
-Build and start the multi-container stack in detached mode:
+Ensure your RDS instance is created with **MySQL 8.4** inside your VPC subnet group and is active at endpoint:
+`database-1.cv44ak4uaxvi.ap-south-1.rds.amazonaws.com`
 
+### 1. Install MySQL Client on EC2
 ```bash
-docker compose up -d --build
+sudo dnf install mariadb105 -y  # Installs mysql client CLI utility
 ```
-This launches:
-- `auto_assemble_db`: Built from `db.Dockerfile` (preloaded with `database.sql` schemas and test data).
-- `auto_assemble_web`: Running Flask + Gunicorn, mapped to public port 80.
 
-Check container states and service health:
+### 2. Import schema and seed data
+Run the schema import by connecting to the RDS server:
 ```bash
-docker compose ps
+mysql -h database-1.cv44ak4uaxvi.ap-south-1.rds.amazonaws.com -u admin -p < database.sql
 ```
+*(Enter your RDS master password when prompted. This creates the `auto_assemble_db` database and imports seed records).*
 
 ---
 
-## 🔎 Step 6: Verify Access
+## 🐳 Step 5: Build & Run the Application Container
 
-Open a web browser and visit:
-`http://<EC2-PUBLIC-IP>`
-
-Log in using the primary seed records:
-- **Administrator**: `admin` / `admin123`
-- **Production Manager**: `manager` / `manager123`
-- **Operations Staff**: `staff` / `staff123`
-
-To inspect logs:
+### 1. Clone the project code
 ```bash
-docker compose logs -f web
-docker compose logs -f db
+git clone https://github.com/SamarthD1/AWS_AutoAssemble_Vehicle_Assembly_Cloud.git
+cd AWS_AutoAssemble_Vehicle_Assembly_Cloud
 ```
+
+### 2. Build the Docker Image
+```bash
+docker build -t autoassemble .
+```
+
+### 3. Start the application container
+Run the container on port 80 and inject the Amazon RDS environment variables to avoid the `Database connection pool is not initialized` error:
+
+```bash
+docker run -d \
+  -p 80:5000 \
+  --name autoassemble-app \
+  -e DB_HOST=database-1.cv44ak4uaxvi.ap-south-1.rds.amazonaws.com \
+  -e DB_USER=admin \
+  -e DB_PASSWORD=<YOUR_RDS_PASSWORD> \
+  -e DB_NAME=auto_assemble_db \
+  -e DB_PORT=3306 \
+  -e FLASK_SECRET_KEY="production-secret-key" \
+  autoassemble
+```
+*(Replace `<YOUR_RDS_PASSWORD>` with your actual AWS RDS master password).*
 
 ---
 
-## 🔒 Step 7: (Recommended) Configure SSL & Reverse Proxy
+## 🔎 Step 6: Verify Deployment
 
-To secure production deployments on port 443 with Nginx and Let's Encrypt SSL:
-
-### 1. Bind Flask Locally
-Modify `docker-compose.yml` to bind web ports to `127.0.0.1:5000:5000` (instead of `80:5000`) so that external traffic is forced through the Nginx reverse proxy.
-
-### 2. Install Nginx and Certbot
-
-#### On Ubuntu LTS
-```bash
-sudo apt-get install -y nginx certbot python3-certbot-nginx
-```
-
-#### On Amazon Linux 2023
-```bash
-sudo dnf install -y nginx python3-pip
-sudo python3 -m venv /opt/certbot/
-sudo /opt/certbot/bin/pip install --upgrade pip
-sudo /opt/certbot/bin/pip install certbot certbot-nginx
-sudo ln -s /opt/certbot/bin/certbot /usr/bin/certbot
-sudo systemctl enable nginx
-sudo systemctl start nginx
-```
-
-### 3. Create Nginx Configuration Block
-
-#### On Ubuntu LTS
-Create `/etc/nginx/sites-available/autoassemble`:
-```nginx
-server {
-    listen 80;
-    server_name yourdomain.com; # Replace with your domain
-
-    location / {
-        proxy_pass http://127.0.0.1:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-Link the file and restart Nginx:
-```bash
-sudo ln -s /etc/nginx/sites-available/autoassemble /etc/nginx/sites-enabled/
-sudo rm /etc/nginx/sites-enabled/default
-sudo systemctl restart nginx
-```
-
-#### On Amazon Linux 2023
-Create `/etc/nginx/conf.d/autoassemble.conf`:
-```nginx
-server {
-    listen 80;
-    server_name yourdomain.com; # Replace with your domain
-
-    location / {
-        proxy_pass http://127.0.0.1:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-Restart Nginx:
-```bash
-sudo systemctl restart nginx
-```
-
-### 4. Fetch Let's Encrypt Certificate
-Verify that your domain DNS record points to your EC2 public IP. Run:
-```bash
-sudo certbot --nginx -d yourdomain.com
-```
-Follow the interactive prompts to enable Let's Encrypt. The script will automatically upgrade port 80 to port 443 with secure SSL certificates.
+1. Check if the container is running successfully:
+   ```bash
+   docker ps
+   ```
+2. Check the container application logs:
+   ```bash
+   docker logs autoassemble-app
+   ```
+3. Open a browser and navigate to:
+   `http://<EC2-PUBLIC-IP>`
+   
+4. Log in using the default portal credentials:
+   - **Administrator**: `admin` / `admin123`
+   - **Production Manager**: `manager` / `manager123`
+   - **Operations Staff**: `staff` / `staff123`

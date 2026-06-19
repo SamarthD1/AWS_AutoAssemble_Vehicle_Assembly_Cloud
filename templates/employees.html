@@ -57,8 +57,15 @@
                         </td>
                         {% if session.get('role_name') in ['Administrator', 'Production Manager'] %}
                         <td class="actions-cell">
-                            <button class="btn btn-secondary btn-small" 
-                                    onclick="openEditModal('{{ emp.id }}', '{{ emp.name }}', '{{ emp.department }}', '{{ emp.role }}', '{{ emp.task_id or '' }}', '{{ emp.task_description or '' }}', '{{ emp.task_status or 'Pending' }}')"
+                            <button class="btn btn-secondary btn-small btn-edit-employee" 
+                                    data-id="{{ emp.id }}"
+                                    data-name="{{ emp.name }}"
+                                    data-department="{{ emp.department }}"
+                                    data-role="{{ emp.role }}"
+                                    data-task-id="{{ emp.task_id or '' }}"
+                                    data-task-description="{{ emp.task_description or '' }}"
+                                    data-task-status="{{ emp.task_status or 'Pending' }}"
+                                    onclick="openEditModalFromButton(this)"
                                     title="Edit Employee">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                             </button>
@@ -229,14 +236,22 @@
 
 {% block extra_scripts %}
 <script>
-    function openEditModal(id, name, department, role, task_id, task_description, task_status) {
+    function openEditModalFromButton(button) {
+        const id = button.getAttribute('data-id');
+        const name = button.getAttribute('data-name');
+        const department = button.getAttribute('data-department');
+        const role = button.getAttribute('data-role');
+        const taskId = button.getAttribute('data-task-id');
+        const taskDescription = button.getAttribute('data-task-description');
+        const taskStatus = button.getAttribute('data-task-status');
+
         document.getElementById('edit-id').value = id;
         document.getElementById('edit-name').value = name;
         document.getElementById('edit-dept').value = department;
         document.getElementById('edit-role').value = role;
-        document.getElementById('edit-task-id').value = task_id;
-        document.getElementById('edit-task-desc').value = task_description;
-        document.getElementById('edit-task-status').value = task_status;
+        document.getElementById('edit-task-id').value = taskId;
+        document.getElementById('edit-task-desc').value = taskDescription;
+        document.getElementById('edit-task-status').value = taskStatus;
         
         openModal('editEmployeeModal');
     }

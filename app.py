@@ -550,7 +550,11 @@ def edit_employee():
     name = request.form.get('name', '').strip()
     department = request.form.get('department', '').strip()
     role = request.form.get('role', '').strip()
-    task_id = request.form.get('task_id', '').strip()
+    task_id_raw = request.form.get('task_id', '').strip()
+    try:
+        task_id = int(task_id_raw) if task_id_raw and task_id_raw.lower() not in ('none', 'null', '') else None
+    except ValueError:
+        task_id = None
     task_description = request.form.get('task_description', '').strip()
     task_status = request.form.get('task_status', 'Pending')
 
