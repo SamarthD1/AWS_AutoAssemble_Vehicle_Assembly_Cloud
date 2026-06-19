@@ -534,6 +534,28 @@ button {
   border: 1px solid var(--card-border);
 }
 
+.table-wrapper::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+
+.table-wrapper::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+.custom-table td.task-desc-cell,
+.custom-table th.task-desc-cell {
+  white-space: normal !important;
+  min-width: 220px;
+  max-width: 320px;
+  word-break: break-word;
+}
+
 .custom-table {
   width: 100%;
   border-collapse: collapse;

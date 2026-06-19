@@ -570,6 +570,12 @@ def edit_employee():
         )
 
         # Handle task updating or insertion
+        if not task_id:
+            # Check if the employee already has a task in the database
+            existing_task = db.execute_query("SELECT id FROM tasks WHERE employee_id = %s LIMIT 1", (emp_id,))
+            if existing_task:
+                task_id = existing_task[0]['id']
+
         if task_id:
             if task_description:
                 # Update existing task

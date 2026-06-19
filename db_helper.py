@@ -7,32 +7,47 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize connection pool
+import threading
+
+connection_pool = None
+pool_lock = threading.Lock()
+
+def init_pool():
+    global connection_pool
+    with pool_lock:
+        if connection_pool is not None:
+            return
+        try:
+            db_config = {
+                "host": Config.DB_HOST,
+                "user": Config.DB_USER,
+                "password": Config.DB_PASSWORD,
+                "database": Config.DB_NAME,
+                "port": Config.DB_PORT
+            }
+            connection_pool = pooling.MySQLConnectionPool(
+                pool_name="auto_assemble_pool",
+                pool_size=5,
+                pool_reset_session=True,
+                **db_config
+            )
+            logger.info("Database connection pool established successfully.")
+        except mysql.connector.Error as err:
+            logger.error(f"Failed to create connection pool: {err}")
+            connection_pool = None
+            raise ConnectionError(f"Database connection pool initialization failed: {err}")
+
+# Try initial connection pool setup, but allow lazy recovery on request
 try:
-    db_config = {
-        "host": Config.DB_HOST,
-        "user": Config.DB_USER,
-        "password": Config.DB_PASSWORD,
-        "database": Config.DB_NAME,
-        "port": Config.DB_PORT
-    }
-    
-    # Create a connection pool with size 5
-    connection_pool = pooling.MySQLConnectionPool(
-        pool_name="auto_assemble_pool",
-        pool_size=5,
-        pool_reset_session=True,
-        **db_config
-    )
-    logger.info("Database connection pool established successfully.")
-except mysql.connector.Error as err:
-    logger.error(f"Failed to create connection pool: {err}")
-    connection_pool = None
+    init_pool()
+except Exception as e:
+    logger.warning("Initial database pool creation failed. Will retry lazily on request.")
 
 def get_connection():
-    """Gets a connection from the connection pool."""
+    """Gets a connection from the connection pool, initializing it if necessary."""
+    global connection_pool
     if not connection_pool:
-        raise ConnectionError("Database connection pool is not initialized.")
+        init_pool()
     try:
         return connection_pool.get_connection()
     except mysql.connector.Error as err:

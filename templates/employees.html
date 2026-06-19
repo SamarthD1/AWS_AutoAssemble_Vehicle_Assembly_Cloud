@@ -30,7 +30,7 @@
                     <th>Name</th>
                     <th>Department</th>
                     <th>Role</th>
-                    <th>Assigned Task</th>
+                    <th class="task-desc-cell">Assigned Task</th>
                     <th>Task Status</th>
                     {% if session.get('role_name') in ['Administrator', 'Production Manager'] %}
                     <th>Actions</th>
@@ -45,7 +45,7 @@
                         <td>{{ emp.name }}</td>
                         <td>{{ emp.department }}</td>
                         <td>{{ emp.role }}</td>
-                        <td>{{ emp.task_description or 'No active task assigned' }}</td>
+                        <td class="task-desc-cell">{{ emp.task_description or 'No active task assigned' }}</td>
                         <td>
                             {% if emp.task_status %}
                             <span class="badge badge-{{ emp.task_status.lower().replace(' ', '') }}">
